@@ -42,7 +42,21 @@ span.material-symbols-sharp,
 }
 .stApp { background-color: #f5f6fa; direction: rtl; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 3rem !important; max-width: 100% !important; }
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+
+/* משאירים את ה-<header> של Streamlit גלוי (שקוף) כדי שכפתור פתיחת ה-Sidebar
+   יהיה תמיד נגיש. מסתירים רק את הרכיבים המיותרים בתוכו. */
+[data-testid="stHeader"] { background: transparent !important; }
+[data-testid="stHeader"] [data-testid="stToolbar"],
+[data-testid="stHeader"] [data-testid="stDecoration"],
+[data-testid="stStatusWidget"] { visibility: hidden !important; }
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] {
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 9999 !important;
+}
 
 /* ======= SIDEBAR ======= */
 [data-testid="stSidebar"] {
@@ -2360,6 +2374,396 @@ html[lang="he"] body,
 @keyframes heroBtnGlow {
     0%, 100% { box-shadow: 0 0 0 3px rgba(237,31,74,0.12), 0 12px 28px rgba(237,31,74,0.36), 0 4px 10px rgba(237,31,74,0.22); }
     50%      { box-shadow: 0 0 0 6px rgba(237,31,74,0.16), 0 16px 36px rgba(237,31,74,0.44), 0 6px 14px rgba(237,31,74,0.28); }
+}
+
+/* =========================================================
+   HERO v4 — RTL Hebrew landing (title + chips + cards + floating CTA)
+   * White bg + soft pink/red radial top-right (blur-3xl style)
+   * Big "GEO Radar" navy title (RTL-aware)
+   * Red chip badges for AI models
+   * Hebrew description paragraph
+   * 3 white cards with rounded corners, soft shadows
+   * CTA floating bottom-right, red gradient pill
+   * Centered flowing CTA
+   ========================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap');
+
+:root {
+    --h3-bg: #FFFFFF;
+    --h3-navy: #1B2559;
+    --h3-navy-lt: #3B4FCC;
+    --h3-rose: #E8294C;
+    --h3-rose-lt: #FF6B8A;
+    --h3-rose-dk: #C41E3A;
+    --h3-slate: #475569;
+    --h3-muted: #64748B;
+    --h3-muted-lt: #94A3B8;
+    --h3-divider: #CBD5E1;
+    --h3-green: #10B981;
+    --h3-blue: #3B82F6;
+    --h3-amber: #F59E0B;
+    --h3-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --h3-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body:has(.hero3-root) .stApp,
+body:has(.hero3-root) [data-testid="stAppViewContainer"],
+body:has(.hero3-root) .main {
+    background: var(--h3-bg) !important;
+    background-image: none !important;
+    animation: none !important;
+}
+body:has(.hero3-root) .block-container {
+    max-width: 100% !important;
+    padding: 0 !important;
+}
+body:has(.hero3-root) .hero-card { display: none !important; }
+
+.hero3-root {
+    position: relative;
+    width: 100%;
+    min-height: calc(100vh - 200px);
+    padding: 80px 32px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 56px;
+    overflow: hidden;
+    font-family: 'Plus Jakarta Sans', 'Inter', 'Assistant', sans-serif;
+    isolation: isolate;
+    direction: ltr;
+}
+
+/* ---- Single subtle crimson orb (top-right) ---- */
+.hero3-blob {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform;
+}
+.hero3-blob--crimson-tr {
+    top: -140px;
+    right: -160px;
+    width: 640px;
+    height: 540px;
+    max-width: 70vw;
+    max-height: 60vw;
+    background: radial-gradient(ellipse,
+        rgba(232,41,76,0.12) 0%,
+        rgba(232,41,76,0.05) 45%,
+        transparent 75%);
+    filter: blur(160px);
+    animation: h3Float1 14s ease-in-out infinite;
+}
+@keyframes h3Float1 {
+    0%,100% { transform: translate(0,0) scale(1); }
+    50%     { transform: translate(20px,-25px) scale(1.06); }
+}
+
+/* ---- TITLE ---- */
+.hero3-title {
+    position: relative;
+    z-index: 2;
+    margin: 40px 0 24px;
+    display: inline-flex;
+    gap: 0.08em;
+    align-items: baseline;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-size: clamp(100px, 15vw, 200px);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-align: center;
+    direction: ltr;
+}
+.hero3-title-word {
+    display: inline-block;
+    opacity: 0;
+    will-change: transform, opacity;
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.hero3-title-word--geo {
+    transform: translateX(-60px);
+    background-image: linear-gradient(90deg, #1B2559 0%, #3B4FCC 50%, #1B2559 100%);
+    animation:
+        h3FlyInLeft 0.6s var(--h3-spring) 0.20s forwards,
+        h3Shimmer 4s linear 1s infinite;
+}
+.hero3-title-word--radar {
+    transform: translateX(60px);
+    background-image: linear-gradient(135deg, #E8294C 0%, #FF6B8A 50%, #C41E3A 100%);
+    animation:
+        h3FlyInRight 0.6s var(--h3-spring) 0.30s forwards,
+        h3Shimmer 3s linear 1s infinite;
+}
+@keyframes h3FlyInLeft  { from{opacity:0;transform:translateX(-60px);} to{opacity:1;transform:translateX(0);} }
+@keyframes h3FlyInRight { from{opacity:0;transform:translateX(60px);}  to{opacity:1;transform:translateX(0);} }
+@keyframes h3FlyUp      { from{opacity:0;transform:translateY(30px);}  to{opacity:1;transform:translateY(0);} }
+@keyframes h3Shimmer    { 0%{background-position:0% center;} 100%{background-position:200% center;} }
+
+/* ---- Tagline ---- */
+.hero3-tagline {
+    position: relative;
+    z-index: 2;
+    margin: -32px 0 0 0;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--h3-muted-lt);
+    letter-spacing: 0.02em;
+    text-align: center;
+    direction: ltr;
+    opacity: 0;
+    animation: h3FlyUp 0.55s var(--h3-spring) 0.50s forwards;
+}
+
+/* ---- AI LOGOS ---- */
+.hero3-logos {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 60px;
+    direction: ltr;
+}
+.hero3-logo {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: default;
+    opacity: 0;
+    transform: translateY(24px);
+    animation: h3FlyUp 0.6s var(--h3-spring) forwards;
+    transition: transform 0.25s var(--h3-bounce);
+    will-change: transform;
+}
+.hero3-logo:nth-of-type(1) { animation-delay: 0.45s; }
+.hero3-logo:nth-of-type(2) { animation-delay: 0.55s; }
+.hero3-logo:nth-of-type(3) { animation-delay: 0.65s; }
+.hero3-logo-icon { position: relative; z-index: 2; transition: transform 0.25s var(--h3-bounce); }
+.hero3-logo-icon svg { display: block; }
+.hero3-logo-glow {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 56px;
+    height: 56px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    filter: blur(22px);
+    opacity: 0.55;
+    z-index: 0;
+    transition: opacity 0.25s ease, filter 0.25s ease, width 0.25s ease;
+    pointer-events: none;
+}
+.hero3-logo--openai .hero3-logo-glow { background: var(--h3-green); }
+.hero3-logo--gemini .hero3-logo-glow { background: var(--h3-blue); }
+.hero3-logo--claude .hero3-logo-glow { background: var(--h3-amber); }
+.hero3-logo-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--h3-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 2;
+}
+.hero3-logo:hover { transform: translateY(-3px); }
+.hero3-logo:hover .hero3-logo-icon { transform: scale(1.1); }
+.hero3-logo:hover .hero3-logo-glow { opacity: 0.85; filter: blur(26px); width: 68px; }
+
+/* ---- STATS ---- */
+.hero3-stats {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    direction: ltr;
+}
+.hero3-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 0 48px;
+    min-width: 180px;
+    opacity: 0;
+    transform: translateY(30px);
+    animation: h3FlyUp 0.6s var(--h3-spring) forwards;
+}
+.hero3-stat:nth-of-type(1) { animation-delay: 0.70s; }
+.hero3-stat:nth-of-type(3) { animation-delay: 0.82s; }
+.hero3-stat:nth-of-type(5) { animation-delay: 0.94s; }
+.hero3-stat-div {
+    width: 1px;
+    height: 96px;
+    background: var(--h3-divider);
+    flex-shrink: 0;
+    opacity: 0;
+    animation: h3FlyUp 0.6s var(--h3-spring) 0.76s forwards;
+}
+.hero3-stat-icon {
+    color: var(--h3-slate);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+.hero3-stat-icon svg { width: 36px; height: 36px; }
+.hero3-stat-num {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-size: clamp(40px, 5vw, 52px);
+    font-weight: 900;
+    line-height: 1;
+    color: var(--h3-navy);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.hero3-stat-lbl {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--h3-muted-lt);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    direction: rtl;
+}
+
+/* Live column: gradient text + halo */
+.hero3-stat--live .hero3-stat-icon { color: var(--h3-rose); }
+.hero3-stat-num--live {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, #E8294C 0%, #FF4D6D 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent !important;
+    filter: drop-shadow(0 0 16px rgba(232,41,76,0.4));
+    animation: h3LiveHalo 2.4s ease-in-out infinite;
+}
+@keyframes h3LiveHalo {
+    0%,100% { filter: drop-shadow(0 0 16px rgba(232,41,76,0.4)); }
+    50%     { filter: drop-shadow(0 0 28px rgba(232,41,76,0.65)); }
+}
+.hero3-live-dot {
+    position: relative;
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--h3-rose);
+    box-shadow: 0 0 12px rgba(232,41,76,0.8);
+}
+.hero3-live-dot::before,
+.hero3-live-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--h3-rose);
+    opacity: 0;
+    animation: h3Ping 2s ease-out infinite;
+    pointer-events: none;
+}
+.hero3-live-dot::after { animation-delay: 0.8s; }
+@keyframes h3Ping {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(2.4); opacity: 0;   }
+}
+
+/* ---- CTA BUTTON (centered horizontally below stats) ----
+   NOTE: st.markdown open/close divs don't actually wrap Streamlit widgets
+   in the DOM (each markdown is its own sibling block). So we use a sentinel
+   div `.hero3-cta-marker` and style the NEXT sibling [data-testid="stElementContainer"]
+   which contains the button. */
+
+/* The marker's container itself (empty) — we hide it */
+[data-testid="stElementContainer"]:has(> [data-testid="stMarkdownContainer"] > .hero3-cta-marker) {
+    display: none !important;
+}
+
+/* Center the button's element-container (the sibling AFTER the marker). */
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 60px auto 0 auto !important;
+    padding: 0 32px 64px !important;
+    direction: ltr !important;
+    animation: h3FlyUp 0.7s var(--h3-spring) 0.9s both,
+               h3CtaBob 3s ease-in-out 2s infinite !important;
+}
+/* The stButton wrapper itself — also flex-centered so inner button stays centered */
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) .stButton,
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) > div {
+    display: flex !important;
+    justify-content: center !important;
+    width: auto !important;
+    margin: 0 auto !important;
+}
+@keyframes h3CtaBob {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-5px); }
+}
+body:has(.hero3-cta-marker) [data-testid="stBaseButton-primary"],
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) button {
+    background: linear-gradient(135deg, var(--h3-rose) 0%, var(--h3-rose-dk) 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 18px 60px !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    font-family: 'Plus Jakarta Sans', 'Assistant', sans-serif !important;
+    letter-spacing: 0.02em !important;
+    min-width: 220px !important;
+    direction: rtl !important;
+    cursor: pointer;
+    box-shadow:
+        0 8px 30px rgba(232,41,76,0.4),
+        0 2px 8px rgba(232,41,76,0.2) !important;
+    transition: all 0.3s var(--h3-bounce) !important;
+    animation: none !important;
+}
+body:has(.hero3-cta-marker) [data-testid="stBaseButton-primary"]::before,
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) button::before {
+    display: none !important;
+}
+body:has(.hero3-cta-marker) [data-testid="stBaseButton-primary"]:hover,
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) button:hover {
+    transform: scale(1.06) !important;
+    box-shadow: 0 16px 50px rgba(232,41,76,0.55) !important;
+    background: linear-gradient(135deg, #FF3358 0%, #E8294C 100%) !important;
+}
+body:has(.hero3-cta-marker) [data-testid="stBaseButton-primary"]:active,
+body:has(.hero3-cta-marker) [data-testid="stElementContainer"]:has([data-testid="stBaseButton-primary"]) button:active {
+    transform: scale(0.98) !important;
+    transition-duration: 0.1s !important;
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 860px) {
+    .hero3-root { padding: 48px 20px 24px; gap: 40px; }
+    .hero3-title { font-size: clamp(52px, 14vw, 88px); }
+    .hero3-logos { gap: 32px; flex-wrap: wrap; }
+    .hero3-stats { flex-direction: column; gap: 28px; }
+    .hero3-stat { padding: 0; }
+    .hero3-stat-div { width: 60px; height: 1px; }
 }
 
 </style>
