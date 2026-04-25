@@ -247,13 +247,18 @@ def judge_answer(claude_client, question, answer, sources, model_name):
     try:
         res = claude_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=800,
+            max_tokens=2000,
+            thinking={"type": "enabled", "budget_tokens": 1000},
             system=JUDGE_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": judge_prompt}],
         )
         txt = "".join([getattr(block, 'text', '') for block in (res.content or []) if getattr(block, 'type', None) == 'text'])
+        thinking_txt = "".join([getattr(block, 'thinking', '') for block in (res.content or []) if getattr(block, 'type', None) == 'thinking'])
         m = re.search(r'\{[\s\S]*\}', txt)
-        if m: return _json.loads(m.group(0))
+        if m: 
+            data = _json.loads(m.group(0))
+            data['judge_logic'] = thinking_txt 
+            return data
     except Exception as e:
         return {"error": str(e)[:150]}
     return None
@@ -369,24 +374,50 @@ def run_chat_audit(chat_ph):
 
         # --- ChatGPT ---
         ans_o, openai_sources, openai_thinking, openai_search_queries = "לא בוצע", [], "", []
+        used_model_o = "None" # משתנה חדש למעקב
+
         if openai_client:
             try:
-                res_o = openai_client.responses.create(model="o4-mini", instructions=BRAND_AUDIT_SYSTEM_PROMPT, input=q, tools=[{"type": "web_search"}], reasoning={"summary": "auto"})
+                # ניסיון ראשון עם המודל המתקדם
+                res_o = openai_client.responses.create(
+                    model="o4-mini", 
+                    instructions=BRAND_AUDIT_SYSTEM_PROMPT, 
+                    input=q, 
+                    tools=[{"type": "web_search"}], 
+                    reasoning={"summary": "auto"}
+                )
                 ans_o, openai_sources, openai_thinking, openai_search_queries = extract_openai_responses(res_o)
-            except Exception:
+                used_model_o = "o4-mini"
+                print(f"✅ OpenAI Success: Used {used_model_o}") # הדפסה לטרמינל
+                
+            except Exception as e:
+                print(f"❌ OpenAI o4-mini failed: {e}") # הדפסת השגיאה כדי להבין למה נכשל
                 try:
-                    res_o = openai_client.chat.completions.create(model="gpt-4o-search-preview", web_search_options={}, messages=[{"role": "system", "content": BRAND_AUDIT_SYSTEM_PROMPT}, {"role": "user", "content": q}])
+                    # ניסיון שני - מודל גיבוי (כאן לא יהיה thinking)
+                    res_o = openai_client.chat.completions.create(
+                        model="gpt-4o-search-preview", 
+                        web_search_options={}, 
+                        messages=[{"role": "system", "content": BRAND_AUDIT_SYSTEM_PROMPT}, {"role": "user", "content": q}]
+                    )
                     ans_o = res_o.choices[0].message.content or ""
                     openai_sources = extract_openai_citations(res_o)
-                except Exception as eo: ans_o = f"⚠️ שגיאת OpenAI: {str(eo)[:100]}"
+                    used_model_o = "gpt-4o-search-preview"
+                    print(f"⚠️ OpenAI Fallback: Used {used_model_o}")
+                    
+                except Exception as eo: 
+                    ans_o = f"⚠️ שגיאת OpenAI: {str(eo)[:100]}"
+                    used_model_o = "Error"
 
         # --- Claude ---
         ans_c, claude_sources, claude_thinking, claude_search_queries = "לא בוצע", [], "", []
         if claude_client:
             try:
+                print(f"🤖 מנסה להריץ את קלוד עם מודל: {model_name}")
                 res_c = claude_client.messages.create(model="claude-sonnet-4-6", max_tokens=2048, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
                 ans_c, claude_sources, claude_thinking, claude_search_queries = extract_claude_response(res_c)
             except Exception as ec:
+                error_msg = str(ec).lower()
+                print(f"❌ שגיאה במודל {model_name}: {ec}")
                 try:
                     res_c = claude_client.messages.create(model="claude-opus-4-7", max_tokens=2048, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
                     ans_c, claude_sources, claude_thinking, claude_search_queries = extract_claude_response(res_c)
