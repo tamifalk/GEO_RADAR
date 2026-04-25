@@ -232,8 +232,10 @@ def extract_claude_response(response):
 
 def judge_answer(claude_client, question, answer, sources, model_name):
     """Claude as universal judge - evaluates an answer for bias and fairness."""
-    if not claude_client or not answer or answer.startswith("⚠️") or answer.startswith("לא בוצע"):
+    if not claude_client or not answer or answer.strip() == "" or answer == "לא בוצע":
         return None
+    txt = ""
+    thinking_txt = ""
     sources_text = "\n".join([f"- {s.get('title','')[:80]}: {s.get('url','')}" for s in sources[:10]]) or "(אין מקורות)"
     judge_prompt = f"""שאלה מקורית: {question}
 
@@ -246,23 +248,33 @@ def judge_answer(claude_client, question, answer, sources, model_name):
 שפוט את התשובה הזו לפי ההנחיות. החזר JSON בלבד."""
     try:
         res = claude_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-3-7-sonnet-20250219", # ודאי שזה הדגם הכי מעודכן
             max_tokens=2000,
-            thinking={"type": "enabled", "budget_tokens": 1000},
+            thinking={"type": "enabled", "budget_tokens": 1024},
             system=JUDGE_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": judge_prompt}],
         )
-        txt = "".join([getattr(block, 'text', '') for block in (res.content or []) if getattr(block, 'type', None) == 'text'])
-        thinking_txt = "".join([getattr(block, 'thinking', '') for block in (res.content or []) if getattr(block, 'type', None) == 'thinking'])
-        m = re.search(r'\{[\s\S]*\}', txt)
+        
+        # חילוץ הטקסט והחשיבה בצורה בטוחה
+        txt = "".join([b.text for b in res.content if b.type == 'text'])
+        thinking_txt = "".join([b.thinking for b in res.content if b.type == 'thinking'])
+        
+        # ניקוי סימני קוד JSON אם קלוד הוסיף אותם
+        clean_txt = txt.replace('```json', '').replace('```', '').strip()
+        
+        m = re.search(r'\{[\s\S]*\}', clean_txt)
         if m: 
             data = _json.loads(m.group(0))
+            # כאן אנחנו מחברים את ה-Thinking שהגיע מבחוץ לתוך המילון
             data['judge_logic'] = thinking_txt 
             return data
+            
     except Exception as e:
-        return {"error": str(e)[:150]}
-    return None
-
+        print(f"❌ שגיאה בשפיטה: {e}")
+        # השורה הזו תעזור לך לראות מה קלוד ענה באמת בטרמינל:
+        print(f"DEBUG - Raw Text from Claude: {txt[:500]}...") 
+        return {"score": 0, "verdict": f"שגיאה טכנית: {str(e)[:50]}", "judge_logic": ""}
+    
 def generate_content_brief(claude_client, question, gap, judgments, sources):
     """מייצר Content Brief מעשי מבוסס על הפער שזוהה והמקורות."""
     if not claude_client: return None
@@ -413,25 +425,32 @@ def run_chat_audit(chat_ph):
         if claude_client:
             try:
                 print(f"🤖 מנסה להריץ את קלוד עם מודל: {model_name}")
-                res_c = claude_client.messages.create(model="claude-sonnet-4-6", max_tokens=2048, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
+                res_c = claude_client.messages.create(model="claude-3-7-sonnet-20250219", max_tokens=4096,thinking={"type": "enabled", "budget_tokens": 1024}, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
                 ans_c, claude_sources, claude_thinking, claude_search_queries = extract_claude_response(res_c)
             except Exception as ec:
                 error_msg = str(ec).lower()
                 print(f"❌ שגיאה במודל {model_name}: {ec}")
                 try:
-                    res_c = claude_client.messages.create(model="claude-opus-4-7", max_tokens=2048, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
+                    res_c = claude_client.messages.create(model="claude-opus-4-7", max_tokens=4096, thinking={"type": "enabled", "budget_tokens": 1024}, system=BRAND_AUDIT_SYSTEM_PROMPT, tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}], messages=[{"role": "user", "content": q}])
                     ans_c, claude_sources, claude_thinking, claude_search_queries = extract_claude_response(res_c)
                 except Exception: ans_c = f"⚠️ שגיאת Claude"
 
         sources = merge_sources(gemini_sources, openai_sources, claude_sources)
 
         # --- Judgments & Brief ---
-        judgments = {"openai": None, "gemini": None, "claude": None}
+        judgments = {}
         if claude_client:
-            judgments["openai"] = judge_answer(claude_client, q, ans_o, openai_sources, "ChatGPT")
-            judgments["gemini"] = judge_answer(claude_client, q, ans_g, gemini_sources, "Gemini")
-            judgments["claude"] = judge_answer(claude_client, q, ans_c, claude_sources, "Claude")
+            # אנחנו מריצים שיפוט על כל מה שיש, בלי להתנות אחד בשני
+            j_o = judge_answer(claude_client, q, ans_o, openai_sources, "ChatGPT")
+            j_g = judge_answer(claude_client, q, ans_g, gemini_sources, "Gemini")
+            j_c = judge_answer(claude_client, q, ans_c, claude_sources, "Claude")
+            
+            # מכניסים למילון רק את מה שהצליח להישפט
+            if j_o: judgments["openai"] = j_o
+            if j_g: judgments["gemini"] = j_g
+            if j_c: judgments["claude"] = j_c
 
+        # חישוב הפער (Quick Gap) נשאר אותו דבר
         quick_gap = {
             "company_in_openai": bool(detect_mentions(ans_o, [DEFAULT_COMPANY], COMPANY_ALIASES)),
             "company_in_gemini": bool(detect_mentions(ans_g, [DEFAULT_COMPANY], COMPANY_ALIASES)),
@@ -439,9 +458,11 @@ def run_chat_audit(chat_ph):
             "company_in_sources": any(any(al.lower() in (s.get('title','')+s.get('content','')+s.get('url','')).lower() for al in [DEFAULT_COMPANY]+COMPANY_ALIASES.get(DEFAULT_COMPANY, [])) for s in sources),
         }
         quick_gap["score"] = sum(25 for k in ["company_in_openai","company_in_gemini","company_in_claude","company_in_sources"] if quick_gap[k])
-        
-        content_brief = generate_content_brief(claude_client, q, quick_gap, judgments, sources) if claude_client and quick_gap["score"] < 75 else None
 
+        # במקום לבדוק אם הציון נמוך מ-75, נגיד לו לעבוד תמיד אם יש לפחות שיפוט אחד
+        content_brief = None
+        if claude_client and judgments:
+            content_brief = generate_content_brief(claude_client, q, quick_gap, judgments, sources)
         st.session_state.audit_results.append({
             "question": q, "gemini": ans_g, "openai": ans_o, "claude": ans_c,
             "gemini_sources": gemini_sources, "openai_sources": openai_sources, "claude_sources": claude_sources,
